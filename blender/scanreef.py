@@ -230,9 +230,39 @@ def place_rock(name, x, y, height, turn, seed):
     return ob
 
 
+# scans not standing as they grow: ('x', degrees) turns the mesh about x first; 'auto' stands it
+# along its long axis with the wider end (the branch tips) up
+ORIENT = {'agaricia_lamarcki': ('y', 141),      # a plate scanned upside down: turned in its plane, its flat base edge down
+          'lobophyllia_wellsi': 'auto'}         # a branch bundle scanned lying diagonally, tips down
+
+
+def orient(ob, how):
+    import numpy as np
+    from mathutils import Matrix
+    if how == 'auto':
+        n = len(ob.data.vertices)
+        co = np.zeros(n * 3, np.float32)
+        ob.data.vertices.foreach_get('co', co)
+        co = co.reshape(n, 3)
+        c = co - co.mean(axis=0)
+        axis = np.linalg.svd(c, full_matrices=False)[2][0]
+        t = c @ axis
+        lo, hi = np.quantile(t, 0.15), np.quantile(t, 0.85)
+        spread = lambda m: np.linalg.norm(c[m] - np.outer(t[m], axis), axis=1).mean()
+        if spread(t < lo) > spread(t > hi):
+            axis = -axis
+        rot = Vector(axis.tolist()).rotation_difference(Vector((0, 0, 1))).to_matrix().to_4x4()
+    else:
+        rot = Matrix.Rotation(math.radians(how[1]), 4, how[0].upper())
+    ob.data.transform(rot)
+    ob.data.update()
+
+
 def place_coral(spec, seed):
     name, cut, x, y, height, where, tint, turn = spec
     ob = import_scan(name)
+    if name in ORIENT:
+        orient(ob, ORIENT[name])
     cut_base(ob, cut)
     fit(ob, height=height)
     if where == 'gravel':
@@ -917,6 +947,17 @@ def main():
     rake.light_linking.receiver_collection = gc
     rake.light_linking.blocker_collection = gc
     sc = bpy.context.scene
+    if '--whereis' in sys.argv:            # each coral's place in the 2688x1080 picture, then stop
+        from bpy_extras.object_utils import world_to_camera_view
+        bpy.context.view_layer.update()
+        print('CAM', sc.camera.name if sc.camera else None, camob.location, camob.rotation_euler, sc.render.resolution_x, sc.render.resolution_y)
+        for o in sc.objects:
+            if o.name.startswith('coral_'):
+                pts = [world_to_camera_view(sc, sc.camera, o.matrix_world @ Vector(c)) for c in o.bound_box]
+                x0, x1 = min(p.x for p in pts) * 2688, max(p.x for p in pts) * 2688
+                y0, y1 = (1 - max(p.y for p in pts)) * 1080, (1 - min(p.y for p in pts)) * 1080
+                print('WHERE %-32s x %4d-%4d  y %4d-%4d' % (o.name, x0, x1, y0, y1))
+        return
     if '--clamtest' in sys.argv or '--cavetest' in sys.argv:
         common.render_settings(64, transparent=False)
         c = bpy.data.objects['clam'].matrix_world.translation if '--clamtest' in sys.argv else mouth
