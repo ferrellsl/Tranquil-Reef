@@ -37,14 +37,14 @@ SPECIES = {
     'bluetang':   dict(count=2, role='fish', size=0.55, maxs=1.0, speed=85, fps=12),
     'clown':      dict(count=2, role='fish', size=0.55, maxs=1.0, speed=65, fps=14),
     'angel':      dict(count=1, role='fish', visitor=True, size=0.60, maxs=1.0, speed=55, fps=9),
-    'butterfly':  dict(count=1, role='fish', size=0.55, maxs=1.0, speed=65, fps=11),
+    'butterfly':  dict(count=1, role='fish', visitor=True, size=0.55, maxs=1.0, speed=65, fps=11),
     'queenangel': dict(count=1, role='fish', visitor=True, size=0.60, maxs=1.0, speed=55, fps=9),
     'chromis':    dict(count=5, role='school', size=0.60, maxs=1.0, speed=110, fps=16),
     'wrasse':     dict(count=2, role='fish', size=0.60, maxs=1.0, speed=95, fps=13),
     'lionfish':   dict(count=1, role='fish', visitor=True, size=0.60, maxs=0.72, speed=35, fps=7),     # from a 3D model (model3d.py)
     'parrotfish': dict(count=1, role='fish', visitor=True, size=0.60, maxs=0.85, speed=60, fps=8),   # 3D model (model3d.py)
     'darkangel':  dict(count=1, role='fish', visitor=True, size=0.60, maxs=0.85, speed=50, fps=9),    # 3D model (model3d.py)
-    'copperband': dict(count=1, role='fish', size=0.55, maxs=1.0, speed=60, fps=11),                  # 3D model (model3d.py)
+    'copperband': dict(count=1, role='fish', visitor=True, size=0.55, maxs=1.0, speed=60, fps=11),                  # 3D model (model3d.py)
     'puffer':     dict(count=1, role='fish', visitor=True, size=0.55, maxs=1.0, speed=40, fps=10),    # 3D model (model3d.py)
     'barracuda':  dict(count=0, role='cruiser', size=0.80, maxs=0.60, speed=120, fps=8),
     'shark':      dict(count=0, role='cruiser', size=0.80, maxs=0.60, speed=95, fps=6),
@@ -612,7 +612,7 @@ def build():
             bg = warm_grade(bg, mask)
         print('caustics...')
         # (a taller reef needs more rows: coarser steps until all frames fit one texture)
-        for down in (5, 6, 7, 8):
+        for down in (6, 7, 8):          # (5 was finer, but the Roku's own images leave the reef only ~80 MB)
             try:
                 data['caustics'] = caustics(info, mask, still=bg, down=down)
                 break
