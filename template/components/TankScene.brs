@@ -129,12 +129,13 @@ function newFish(sp as object, i as integer) as object
         f.d = between(0.15, 0.35)
     else if sp.role = "school"
         if m.schools[sp.name] = invalid
-            sc = { x: between(300, m.W - 300), y: between(250, 600), dir: -1, tx: 900, ty: 400, d: between(0.25, 0.85) }
+            sc = { name: sp.name, x: between(300, m.W - 300), y: between(250, 600), dir: -1, tx: 900, ty: 400, d: between(0.25, 0.85) }
             pickTarget(sc, sc.d)
             m.schools[sp.name] = sc
         end if
         f.school = m.schools[sp.name]
-        f.d = f.school.d + between(-0.08, 0.08)
+        f.dOff = between(-0.08, 0.08)
+        f.d = f.school.d + f.dOff
         f.ox = between(-170, 170)
         f.oy = between(-70, 70)
     else
@@ -151,7 +152,9 @@ function newFish(sp as object, i as integer) as object
     end if
     f.spr.g.scaleRotateCenter = [sp.w / 2, sp.h / 2]
     f.spr.g.scale = [f.s, f.s]
-    f.speed = sp.speed * (0.7 + 0.5 * f.d) * between(0.8, 1.2)
+    f.far = f.d < 0.62
+    f.spk = between(0.8, 1.2)
+    f.speed = sp.speed * (0.7 + 0.5 * f.d) * f.spk
     if sp.role = "cruiser"
         f.away = between(15, 60)
         f.x = -2000
@@ -164,6 +167,31 @@ function newFish(sp as object, i as integer) as object
         pickTarget(f, f.d)
     end if
     return f
+end function
+
+' a new depth for a fish: its size and speed follow, and it moves to the layer behind or in
+' front of the reef.  Only done while it is out of sight (off the screen, or out of the tank).
+' (Depth used to be chosen once at the start: a fish drawn into the back stayed there all session.)
+sub setDepth(f as object, d as float)
+    if d < 0 then d = 0
+    if d > 1 then d = 1
+    f.d = d
+    f.s = 0.42 + 0.58 * d
+    f.speed = f.sp.speed * (0.7 + 0.5 * d) * f.spk
+    g = f.spr.g
+    g.scale = [f.s, f.s]
+    far = d < 0.62
+    if far <> f.far
+        if f.far then m.far.removeChild(g) else m.near.removeChild(g)
+        if far then m.far.appendChild(g) else m.near.appendChild(g)
+        f.far = far
+    end if
+end sub
+
+' out of sight on the screen just now (the tank is wider than the screen and pans)
+function offScreen(x as float) as boolean
+    sx = x + m.tank.translation[0]
+    return sx < -260 or sx > 1920 + 260
 end function
 
 sub pickTarget(f as object, d as float)
@@ -199,6 +227,12 @@ sub onTick()
     end for
     moveVisitors(dt)
     for each f in m.fish
+        if not f.away and f.school = invalid and not f.turning and f.sp.role <> "cruiser" and not f.leaving
+            if offScreen(f.x) and Rnd(0) < dt * 0.05
+                setDepth(f, between(0.30, 1.0))
+                pickTarget(f, f.d)
+            end if
+        end if
         if f.away
             ' (a visitor out of the tank: nothing to draw)
         else if f.sp.role = "cruiser"
@@ -216,6 +250,13 @@ sub onTick()
 end sub
 
 sub moveLeader(sc as object, dt as float)
+    if offScreen(sc.x - 200) and offScreen(sc.x + 200) and Rnd(0) < dt * 0.05
+        sc.d = between(0.25, 0.85)
+        for each f in m.fish
+            if f.school <> invalid and f.sp.name = sc.name then setDepth(f, sc.d + f.dOff)
+        end for
+        pickTarget(sc, sc.d)
+    end if
     dx = sc.tx - sc.x
     if Abs(dx) < 60 or Rnd(0) < dt * 0.05 then pickTarget(sc, sc.d)
     if dx > 0 then sc.x = sc.x + 90 * dt else sc.x = sc.x - 90 * dt
@@ -323,6 +364,7 @@ sub moveVisitors(dt as float)
         f.spr.p.uri = f.sp.sheet
         f.spr.cur = -1
         f.turning = false
+        setDepth(f, between(0.45, 1.0))       ' (fresh each visit, mostly in front of the reef)
         if Rnd(0) < 0.5
             f.dir = 1
             f.x = -250
@@ -332,14 +374,14 @@ sub moveVisitors(dt as float)
             f.x = m.W + 250
             f.tx = between(200, m.W * 0.65)
         end if
-        f.y = between(250, 700)
+        if f.far then f.y = between(400, 780) else f.y = between(250, 700)
         f.ty = f.y
         f.stay = between(70, 140)
         f.leaving = false
         f.away = false
         f.spr.g.visible = true
         m.visitor = f
-        print "visitor: "; f.sp.name
+        if f.far then print "visitor: "; f.sp.name; " (behind the reef)" else print "visitor: "; f.sp.name; " (in front)"
         return
     end if
     v.stay = v.stay - dt
