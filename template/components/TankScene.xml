@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- The tank.  Back to front: the rendered reef, light rays, far fish (behind
+     the reef), the middle reef cut out of the same render, the moray in its
+     cave, near fish, the rocks close to the glass, bubbles.  Everything sits in
+     one group that drifts a few pixels over minutes, so no pixel stays still. -->
+<component name="TankScene" extends="Scene">
+    <script type="text/brightscript" uri="pkg:/components/TankScene.brs" />
+    <children>
+        <Rectangle id="water" width="1920" height="1080" color="0x06243FFF" />
+        <Group id="tank">
+            <Group id="background" />
+            <Poster id="waterTint" />
+            <Group id="rays" />
+            <Group id="farFish" />
+            <Group id="reefMid" />
+            <Group id="caustics" />
+            <Group id="corals" />
+            <Group id="eelClip" />
+            <Poster id="eelFront" />
+            <Group id="nearFish" />
+            <Group id="reefFront" />
+            <Group id="bubbles" />
+        </Group>
+        <Timer id="tick" repeat="true" duration="0.033" />
+    </children>
+</component>

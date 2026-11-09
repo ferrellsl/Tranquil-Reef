@@ -1,0 +1,18 @@
+# build outputs
+channel/
+out/
+work/
+build/
+dist/
+__pycache__/
+*.spec
+installer/tranquil_reef.ico
+
+# downloaded third-party assets (sources in CREDITS.md); too big for git
+scans/
+textures/
+photos/orig/
+photos/cand/
+photos/coralorig/
+photos/coralcut/
+photos/coralrejects/
