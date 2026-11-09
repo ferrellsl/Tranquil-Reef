@@ -464,21 +464,26 @@ sub setupClam()
     if c = invalid then return
     spr = newSprite(m.top.findNode("corals"), c)
     spr.g.translation = [c.x, c.y]
-    m.clam = { spr: spr, info: c, state: "open", t: 0.0, wait: between(25, 60), f: 0.0 }
+    ' a second copy on top fades in the next frame, so it moves smoothly between frames
+    spr2 = newSprite(m.top.findNode("corals"), c)
+    spr2.g.translation = [c.x, c.y]
+    spr2.g.opacity = 0
+    m.clam = { spr: spr, spr2: spr2, info: c, state: "open", t: 0.0, wait: between(25, 60), f: 0.0 }
 end sub
 
 sub moveClam(dt as float)
     if m.clam = invalid then return
     c = m.clam
     n = c.info.frames
+    b = Int(n / 2) - 1     ' frames 0..b: breathing (0 = mantle swelled out); b+1..n-1: the flinch shut
     c.t = c.t + dt
     if c.state = "open"
-        ' breathing: drift between fully open and a little drawn in
-        c.f = 1.2 + 1.2 * Sin(c.t * 0.9)
+        ' breathing, a breath every 2 s: the mantle swells out over the lips and settles back
+        c.f = b / 2 - (b / 2) * Cos(c.t * 3.14159)
         c.wait = c.wait - dt
         if c.wait <= 0 then c.state = "closing"
     else if c.state = "closing"
-        c.f = c.f + dt * 22.0
+        c.f = c.f + dt * 14.0
         if c.f >= n - 1
             c.f = n - 1
             c.state = "shut"
@@ -488,17 +493,23 @@ sub moveClam(dt as float)
         c.wait = c.wait - dt
         if c.wait <= 0 then c.state = "opening"
     else if c.state = "opening"
-        c.f = c.f - dt * 2.2
-        if c.f <= 1.2
+        ' opens again slowly, back to the settled end of the breath
+        c.f = c.f - dt * 1.4
+        if c.f <= b
+            c.f = b
             c.state = "open"
-            c.t = 0
+            c.t = 1.0                  ' (the breath carries on from there: half a breath in)
             c.wait = between(30, 80)
         end if
     end if
-    k = Int(c.f + 0.5)
-    if k < 0 then k = 0
-    if k > n - 1 then k = n - 1
+    if c.f < 0 then c.f = 0
+    if c.f > n - 1 then c.f = n - 1
+    k = Int(c.f)
+    k2 = k + 1
+    if k2 > n - 1 then k2 = n - 1
     setFrame(c.spr, k)
+    setFrame(c.spr2, k2)
+    c.spr2.g.opacity = c.f - k
 end sub
 
 sub setupRays()

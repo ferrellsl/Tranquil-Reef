@@ -70,7 +70,7 @@ ROCKS = [
 CAVE = ('boulder_01', -0.55, 0.15, 1.05, 15)
 CAVE_AXIS = Vector((-0.42, 0.91, 0.05)).normalized()       # the moray's rock, on the gravel at the foot of the reef
 CLAM = (1.75, -1.55, 0.85, -8)                    # x, y, width, turn
-CLAM_TILT = 25                                    # degrees, its opening tipped toward the viewer
+CLAM_TILT = 45                                    # degrees, its opening tipped toward the viewer
 
 
 def scan_path(name):
@@ -815,7 +815,14 @@ def set_border(camob, obs_points):
             'h': round((y1 - y0) * H)}
 
 
-def render_clam(camob, samples, frames=12):
+# the clam's frames: the first half its slow breathing (mantle swelled out over the lips, then
+# settling back), the second half the flinch shut.  The channel blends neighboring frames.
+# (breathing stays at s <= 0, where only the mantle moves: past 0 the valves start to close, and
+# their lips jumped from frame to frame)
+CLAM_STATES = [-0.45 + 0.45 * k / 5 for k in range(6)] + [0.20 + 0.80 * k / 5 for k in range(6)]
+
+
+def render_clam(camob, samples, frames=len(CLAM_STATES)):
     clam = bpy.data.objects['clam']
     if NHMW:
         mantle, prof = None, None
@@ -828,7 +835,7 @@ def render_clam(camob, samples, frames=12):
     set_gape(clam, CLAM_OPEN)
     bpy.context.view_layer.update()
     if NHMW:
-        set_mantle(clam, -0.12)
+        set_mantle(clam, CLAM_STATES[0])          # (the border must hold the most swelled pose)
         bpy.context.view_layer.update()
     pts = [o.matrix_world @ Vector(c) for o in (clam,) for c in o.bound_box]
     pts += [p + Vector((0, 0, 0.10)) for p in pts]          # room for the mantle above the lips
@@ -839,7 +846,7 @@ def render_clam(camob, samples, frames=12):
         c = f / (frames - 1)
         c = c * c * (3 - 2 * c)
         if NHMW:
-            set_mantle(clam, -0.12 + 1.12 * c)       # frame 0 swelled a little, the last drawn in
+            set_mantle(clam, CLAM_STATES[f])
         else:
             set_gape(clam, CLAM_OPEN * (1 - c) + CLAM_SHUT * c)
             p = mantle_points(prof, 1.0 - c)
