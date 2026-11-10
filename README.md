@@ -4,6 +4,10 @@ A reef aquarium screensaver for Roku.
 
 ![Tranquil Reef on the screen](docs/screen.jpg)
 
+I've been a fan of Jim Sachs and his artwork since his early days on the C64 and Amiga. I was disappointed
+to hear that he was removing his aquarium screensaver from Roku devices as I have it installed on the
+3 Roku devices I own as well as on my Windows and Android devices.  So I decided I'd create my own aquarium
+screensaver for Roku devices since Jim's will be removed from all Roku's on Dec. 1st, 2026.
 Tropical fish swim through a coral reef built from museum 3D scans of real corals. They turn around
 in real 3D, and their fins flex as they swim. A school of chromis turns together. A moray eel slides
 out of its cave, looks around and backs in again. A giant clam breathes, and now and then it flinches
