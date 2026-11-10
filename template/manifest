@@ -5,7 +5,6 @@ minor_version=0
 build_version=1
 mm_icon_focus_fhd=pkg:/images/icon_fhd.png
 mm_icon_focus_hd=pkg:/images/icon_hd.png
-splash_screen_fhd=pkg:/images/splash_fhd.jpg
 splash_color=#06243F
 splash_min_time=0
 ui_resolutions=fhd

@@ -7,7 +7,7 @@ A reef aquarium screensaver for Roku.
 Tropical fish swim through a coral reef built from museum 3D scans of real corals. They turn around
 in real 3D, and their fins flex as they swim. A school of chromis turns together. A moray eel slides
 out of its cave, looks around and backs in again. A giant clam breathes, and now and then it flinches
-shut. Caustic light ripples over the sand. Tangs, clownfish, wrasses and chromis live in the tank, and
+shut. Caustic light ripples over the sand. Yellow tangs, clownfish, wrasses and chromis live in the tank, and
 eight more (three angelfish, two butterflyfish, a lionfish, a parrotfish and a puffer) take turns
 visiting it, one at a time. The view pans slowly from one end of the tank to the other:
 
@@ -33,9 +33,10 @@ upload the zip.
 ## How it is made
 
 The tank is rendered in [Blender](https://www.blender.org) and played back on the Roku as layers and
-sprite sheets. The Roku has 100 MB of texture memory, but its own home-screen images keep about 20 MB
-of it, so the reef is kept to about 76 MB at its peak: the visiting fish take turns so that only one
-visitor's sheet is loaded at a time.
+sprite sheets. The Roku has 100 MB of texture memory, but its own home-screen images can keep more
+than 20 MB of it, so the reef is kept to about 71 MB at its peak: the visiting fish take turns so
+that only one visitor's sheet is loaded at a time, and the moray's sheet is loaded only while it is
+out of its cave.
 
 | Part | What it does |
 |---|---|

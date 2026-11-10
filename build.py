@@ -34,7 +34,7 @@ SCENE = os.path.join(WORK, 'tankscene') if os.path.exists(os.path.join(WORK, 'ta
 # speed (px/s at full size), swim-cycle frames per second
 SPECIES = {
     'yellowtang': dict(count=2, role='fish', size=0.55, maxs=1.0, speed=80, fps=11),
-    'bluetang':   dict(count=2, role='fish', size=0.55, maxs=1.0, speed=85, fps=12),
+    'bluetang':   dict(count=0, role='fish', size=0.55, maxs=1.0, speed=85, fps=12),
     'clown':      dict(count=2, role='fish', size=0.55, maxs=1.0, speed=65, fps=14),
     'angel':      dict(count=1, role='fish', visitor=True, size=0.60, maxs=1.0, speed=55, fps=9),
     'butterfly':  dict(count=1, role='fish', visitor=True, size=0.55, maxs=1.0, speed=65, fps=11),
@@ -159,7 +159,7 @@ def changing_part(frames, x, y, pad=4):
     return [f.crop(b) for f in frames], x + b[0], y + b[1]
 
 
-def fit_sheet(frames, name, x, y):
+def fit_sheet(frames, name, x, y, gutter=GUTTER):
     """In-scene sprite frames (rendered at their place in the picture): trim the empty margin
     they all share, shrink them a little if they still do not fit one texture (the channel
     scales them back up).  Returns sheet info with the frames' place on screen."""
@@ -175,14 +175,14 @@ def fit_sheet(frames, name, x, y):
     k = 1.0
     while True:
         tw, th = int(fw * k), int(fh * k)
-        cols = max(1, MAX_TEX // (tw + GUTTER))
-        if cols * (MAX_TEX // (th + GUTTER)) >= len(frames):
+        cols = max(1, MAX_TEX // (tw + gutter))
+        if cols * (MAX_TEX // (th + gutter)) >= len(frames):
             break
         k *= 0.94
     small = frames if k == 1.0 else [f.resize((tw, th), Image.LANCZOS) for f in frames]
     print('  %s: %d frames %dx%d at %.2f' % (name, len(frames), fw, fh, k))
-    uri, cols, rows = sheet(small, name)
-    info = sheet_info(uri, cols, rows, tw, th, fw, fh)
+    uri, cols, rows = sheet(small, name, gutter=gutter)
+    info = sheet_info(uri, cols, rows, tw, th, fw, fh, gutter=gutter)
     info.update({'frames': len(frames), 'x': x, 'y': y})
     return info
 
@@ -243,7 +243,7 @@ def build_clam():
         frames, cx, cy = lit_frames(fdir, place['x'], place['y']), place['x'], place['y']
         if place.get('in_background'):
             frames, cx, cy = changing_part(frames, cx, cy)
-        return fit_sheet(frames, 'clam.png', cx, cy)
+        return fit_sheet(frames, 'clam.png', cx, cy, gutter=2)   # (never tilts: 2 px is enough)
     paths = [os.path.join(cdir, f) for f in sorted(os.listdir(cdir)) if f.endswith('.png')]
     box = bbox_union(paths, pad=2)
     dw = place['w']
@@ -266,7 +266,7 @@ def build_eel(info):
         # frames: `loop` out of the hole turning its head, then `slide` backing into the hole
         e = json.load(open(ej))
         fdir = os.path.join(SCENE, 'eelframes')
-        sinfo = fit_sheet(lit_frames(fdir, e['x'], e['y']), 'moray.png', e['x'], e['y'])
+        sinfo = fit_sheet(lit_frames(fdir, e['x'], e['y']), 'moray.png', e['x'], e['y'], gutter=2)
         blank = Image.new('RGBA', (4, 4), (0, 0, 0, 0))
         sinfo.update({'crop': True, 'loop': e['loop'], 'slide': e['slide'], 'fps': 12, 'outMax': 0, 'clipX': 0, 'clipBottom': 1080,
                       'front': {'uri': save(blank, 'hole_front.png'), 'x': 0, 'y': 0, 'w': 4, 'h': 4}})
@@ -761,7 +761,7 @@ def icons(data):
     crop = pv.crop((300, 0, 300 + 1440, 1080))
     crop.resize((540, 405), Image.LANCZOS).save(os.path.join(IMAGES, 'icon_fhd.png'))
     crop.resize((290, 218), Image.LANCZOS).save(os.path.join(IMAGES, 'icon_hd.png'))
-    pv.crop((0, 0, 1920, 1080)).convert('RGB').save(os.path.join(IMAGES, 'splash_fhd.jpg'), quality=88)
+    # (no splash picture: the Roku kept it in texture memory the whole time; splash_color is shown instead)
 
 
 def package(data):

@@ -51,8 +51,23 @@ end sub
 sub setTiles(g as object, tiles as object)
     if tiles = invalid then return
     if Type(tiles) = "roAssociativeArray" then tiles = [tiles]
+    if m.layers = invalid then m.layers = []
     for each t in tiles
-        setLayer(g.createChild("Poster"), t)
+        p = g.createChild("Poster")
+        setLayer(p, t)
+        m.layers.Push({ p: p, uri: t.uri })
+    end for
+end sub
+
+' if the Roku runs short of texture memory it may drop a layer that never changes (the screen
+' then shows only the blue behind it); load such a layer again
+sub checkLayers()
+    for each l in m.layers
+        if l.p.loadStatus = "failed"
+            print "layer reloaded: "; l.uri
+            l.p.uri = ""
+            l.p.uri = l.uri
+        end if
     end for
 end sub
 
@@ -221,6 +236,7 @@ sub onTick()
         m.tank.translation = [-20 + 14 * Sin(t / 97.0), -11 + 8 * Sin(t / 131.0)]
     end if
     moveWater(t)
+    if Int(t / 3) <> Int((t - dt) / 3) then checkLayers()
 
     for each key in m.schools
         moveLeader(m.schools[key], dt)
@@ -593,6 +609,9 @@ sub setupEel()
         m.eelSpr2.g.translation = [e.x, e.y]
         m.eelLayer = clip
         clip.opacity = 0.004
+        ' its sheet (the biggest of all) is only loaded while it is out of the hole
+        m.eelSheet = e.sheet
+        eelLoad(false)
         m.eel.p = 0.0
         ' the frame sequence from fully out to fully in: out pose, then the backing-in frames
         m.eelPath = [0]
@@ -627,6 +646,13 @@ sub eelVisible(v as boolean)
     if v then m.eelLayer.opacity = 1.0 else m.eelLayer.opacity = 0.004
 end sub
 
+sub eelLoad(v as boolean)
+    if v then u = m.eelSheet else u = ""
+    m.eelSpr.p.uri = u
+    m.eelSpr2.p.uri = u
+    m.eel.loaded = v
+end sub
+
 sub eelState(st as string)
     m.eel.state = st
     print "moray: "; st
@@ -639,6 +665,8 @@ sub moveEelFrames(dt as float)
     e = s.info
     if s.state = "hidden"
         s.wait = s.wait - dt
+        ' load its sheet a couple of seconds before it shows
+        if s.wait <= 2 and not s.loaded then eelLoad(true)
         if s.wait <= 0
             eelState("emerge")
             s.p = 0.0
@@ -676,6 +704,7 @@ sub moveEelFrames(dt as float)
             eelState("hidden")
             s.wait = between(15, 40)
             eelVisible(false)
+            eelLoad(false)
         else
             q = s.p
             showEelPath(e.slide * q * q * (3 - 2 * q))
