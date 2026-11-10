@@ -765,6 +765,9 @@ def icons(data):
 
 
 def package(data):
+    # the memory test's fillers (TankScene setupSqueeze): 8.4 MB of texture each, a few KB on disk
+    for i in range(6):
+        Image.new('RGBA', (2040, 1020), (i * 40, 0, 0, 255)).save(os.path.join(IMAGES, 'filler_%d.png' % i))
     for sub in ('source', 'components'):
         dst = os.path.join(CHANNEL, sub)
         if os.path.exists(dst):

@@ -36,7 +36,9 @@ The tank is rendered in [Blender](https://www.blender.org) and played back on th
 sprite sheets. The Roku has 100 MB of texture memory, but its own home-screen images can keep more
 than 20 MB of it, so the reef is kept to about 71 MB at its peak: the visiting fish take turns so
 that only one visitor's sheet is loaded at a time, and the moray's sheet is loaded only while it is
-out of its cave.
+out of its cave. When the reef starts as a screensaver, the home screen can still be holding
+much more than that, so the reef loads its pictures one at a time, the background first, and leaves
+out what does not fit (the visitors and the moray first) until there is room again.
 
 | Part | What it does |
 |---|---|

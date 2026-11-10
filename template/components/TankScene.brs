@@ -7,6 +7,7 @@
 ' them turned them upside down.  The sheets carry mirrored frames instead.)
 
 sub init()
+    m.released = false
     m.data = ParseJson(ReadAsciiFile("pkg:/data/tank.json"))
     m.tank = m.top.findNode("tank")
     ' the tank is wider than the screen; the view pans slowly across it
@@ -30,6 +31,7 @@ sub init()
         end for
     end for
     m.visitor = invalid
+    m.vpend = invalid
     m.lastVisitor = ""
     m.visitorWait = between(3, 10)
 
@@ -39,6 +41,9 @@ sub init()
     setupRays()
     setupEel()
     setupBubbles()
+    setupLoader()
+    sq = m.global.squeeze
+    if sq <> invalid and sq > 0 then setupSqueeze(sq)
 
     m.clock = CreateObject("roTimespan")
     m.last = m.clock.TotalMilliseconds()
@@ -46,29 +51,279 @@ sub init()
     m.timer = m.top.findNode("tick")
     m.timer.observeField("fire", "onTick")
     m.timer.control = "start"
+    ' (keys only reach a node with focus: without it Back did nothing)
+    m.top.setFocus(true)
 end sub
 
 sub setTiles(g as object, tiles as object)
     if tiles = invalid then return
     if Type(tiles) = "roAssociativeArray" then tiles = [tiles]
-    if m.layers = invalid then m.layers = []
     for each t in tiles
-        p = g.createChild("Poster")
-        setLayer(p, t)
-        m.layers.Push({ p: p, uri: t.uri })
+        setLayer(g.createChild("Poster"), t)
     end for
 end sub
 
-' if the Roku runs short of texture memory it may drop a layer that never changes (the screen
-' then shows only the blue behind it); load such a layer again
-sub checkLayers()
-    for each l in m.layers
-        if l.p.loadStatus = "failed"
-            print "layer reloaded: "; l.uri
-            l.p.uri = ""
-            l.p.uri = l.uri
+' ------------------------------------------------------------------ texture memory
+
+' on the way out: stop, and let go of every picture (main.brs calls this as the screen closes)
+function releaseAll(params = invalid as dynamic) as boolean
+    if m.released then return true
+    m.released = true
+    if m.timer <> invalid then m.timer.control = "stop"
+    posters = []
+    collectPosters(m.top, posters)
+    for each p in posters
+        p.uri = ""
+    end for
+    m.tank = invalid
+    t = m.top.findNode("tank")
+    if t <> invalid then m.top.removeChild(t)
+    g = m.top.findNode("squeeze")
+    if g <> invalid then m.top.removeChild(g)
+    m.fish = invalid
+    m.visitors = invalid
+    m.visitor = invalid
+    m.vpend = invalid
+    m.ld = invalid
+    print "released"; posters.Count(); " pictures"
+    return true
+end function
+
+' Back (when it is opened as a channel) closes it: let go of everything first
+function onKeyEvent(key as string, press as boolean) as boolean
+    if press and key = "back" then releaseAll()
+    return false
+end function
+
+' The Roku shares its texture memory with whatever is behind the reef: started as a screensaver
+' from the home screen, the home screen keeps 20-45 MB of it, and the reef may not get all it
+' needs.  So the pictures are loaded one at a time, the background first; what does not fit is
+' left out (and tried again now and then), and if the background or the reef is ever dropped,
+' the extras (the visiting fish, the moray) and then the least needed pictures make room for it.
+
+function loadPrio(u as string) as integer
+    if Instr(1, u, "background") > 0 then return 0
+    if Instr(1, u, "reef_mid") > 0 then return 1
+    if Instr(1, u, "reef_front") > 0 then return 2
+    if Instr(1, u, "water") > 0 then return 3
+    if Instr(1, u, "hole_front") > 0 or Instr(1, u, "bubble") > 0 then return 4
+    if Instr(1, u, "clam") > 0 then return 6
+    if Instr(1, u, "caustics") > 0 then return 7
+    return 5                                  ' the resident fish
+end function
+
+sub collectPosters(n as object, list as object)
+    if n.subtype() = "Poster" and n.uri <> "" then list.Push(n)
+    for i = 0 to n.getChildCount() - 1
+        collectPosters(n.getChild(i), list)
+    end for
+end sub
+
+sub setupLoader()
+    posters = []
+    collectPosters(m.top, posters)
+    byUri = {}
+    groups = []
+    for each p in posters
+        u = p.uri
+        if not byUri.DoesExist(u)
+            g = { uri: u, prio: loadPrio(u), posters: [], state: "off" }
+            byUri[u] = g
+            ' (kept in order of need)
+            k = groups.Count()
+            while k > 0 and groups[k - 1].prio > g.prio
+                k = k - 1
+            end while
+            groups.Push(g)
+            for j = groups.Count() - 1 to k + 1 step -1
+                groups[j] = groups[j - 1]
+            end for
+            groups[k] = g
+        end if
+        byUri[u].posters.Push(p)
+        p.uri = ""
+    end for
+    m.ld = { groups: groups, cur: invalid, since: 0.0, retryAt: 0.0, checkAt: 0.0, hold: false }
+    m.extras = false
+    m.budget = 0
+    if m.global.budget <> invalid then m.budget = m.global.budget
+    m.used = 0.0
+    m.held = {}
+    if m.budget > 0 then print "budget:"; m.budget; " MB"
+end sub
+
+' memory test (launched with ?budget=MB): act as if the Roku could not load anything past that much
+function budgetTake(key as string, p as object) as boolean
+    if m.held = invalid or m.budget = 0 then return true
+    mb = p.bitmapWidth * p.bitmapHeight * 4 / 1000000.0
+    if m.used + mb > m.budget
+        print "budget: no room for "; key; " ("; Int(mb * 10) / 10; " MB, "; Int(m.used); " of"; m.budget; " MB used)"
+        return false
+    end if
+    m.used = m.used + mb
+    m.held[key] = mb
+    return true
+end function
+
+sub budgetGive(key as string)
+    if m.held = invalid then return             ' (before setupLoader: the moray's first eelLoad)
+    if m.budget = 0 or not m.held.DoesExist(key) then return
+    m.used = m.used - m.held[key]
+    m.held.Delete(key)
+end sub
+
+sub setGroup(g as object, onOff as boolean)
+    if onOff then u = g.uri else u = ""
+    if not onOff then budgetGive(g.uri)
+    for each p in g.posters
+        p.uri = u
+    end for
+end sub
+
+function groupStatus(g as object) as string
+    st = "ready"
+    for each p in g.posters
+        s = p.loadStatus
+        if s = "failed" then return "failed"
+        if s <> "ready" then st = "loading"
+    end for
+    return st
+end function
+
+function shortName(u as string) as string
+    k = Instr(1, u, "images/")
+    if k > 0 then return Mid(u, k + 7)
+    return u
+end function
+
+' make room: the extras go first, then the least needed picture; false if nothing is left to give
+function shedOne() as boolean
+    if m.extras
+        m.extras = false
+        dropExtras()
+        m.ld.retryAt = m.t + 60
+        print "memory short: no visitors or moray for now"
+        return true
+    end if
+    gs = m.ld.groups
+    for k = gs.Count() - 1 to 0 step -1
+        g = gs[k]
+        if g.prio > 2 and g.state = "on"
+            setGroup(g, false)
+            g.state = "shed"
+            m.ld.retryAt = m.t + 60
+            print "memory short: left out "; shortName(g.uri)
+            return true
         end if
     end for
+    return false
+end function
+
+' a visitor or the moray could not be loaded: no extras for a while
+sub noRoomForExtras()
+    m.extras = false
+    dropExtras()
+    m.ld.retryAt = m.t + 60
+    print "memory short: no visitors or moray for now"
+end sub
+
+sub moveLoader()
+    L = m.ld
+    if L.hold then return
+    t = m.t
+    if L.cur <> invalid
+        g = L.cur
+        st = groupStatus(g)
+        if st = "ready" and not budgetTake(g.uri, g.posters[0]) then st = "failed"
+        if st = "ready"
+            g.state = "on"
+            L.cur = invalid
+            print "loaded "; shortName(g.uri)
+        else if st = "failed" or t - L.since > 15
+            setGroup(g, false)
+            L.cur = invalid
+            print "no room for "; shortName(g.uri)
+            if g.prio <= 2
+                ' the background or the reef: something else makes room, then it is tried again
+                g.state = "off"
+                if not shedOne()
+                    g.state = "shed"
+                    L.retryAt = t + 10
+                end if
+            else
+                g.state = "shed"
+                L.retryAt = t + 60
+            end if
+        end if
+        return
+    end if
+    ' every 2 s: is everything that was loaded still there?
+    if t >= L.checkAt
+        L.checkAt = t + 2
+        for each g in L.groups
+            if g.state = "on" and groupStatus(g) <> "ready"
+                print "dropped by the Roku: "; shortName(g.uri)
+                setGroup(g, false)
+                if g.prio <= 2
+                    g.state = "off"
+                    shedOne()
+                else
+                    g.state = "shed"
+                    L.retryAt = t + 60
+                end if
+            end if
+        end for
+    end if
+    ' the next picture still to load
+    for each g in L.groups
+        if g.state = "off"
+            setGroup(g, true)
+            g.state = "loading"
+            L.cur = g
+            L.since = t
+            return
+        end if
+    end for
+    ' everything that fits is in; now and then try again what was left out, then the extras
+    if t < L.retryAt then return
+    for each g in L.groups
+        if g.state = "shed"
+            g.state = "off"
+            L.retryAt = t + 60
+            print "trying again: "; shortName(g.uri)
+            return
+        end if
+    end for
+    if not m.extras
+        m.extras = true
+        print "room for visitors and the moray"
+    end if
+end sub
+
+' memory test (launched with ?squeeze=MB): hold about that much texture memory, as the home screen does
+sub setupSqueeze(mb as integer)
+    g = m.top.findNode("squeeze")
+    n = Int((mb + 4) / 8.4)
+    if n > 6 then n = 6
+    m.squeeze = []
+    for i = 0 to n - 1
+        p = g.createChild("Poster")
+        p.uri = "pkg:/images/filler_" + i.ToStr() + ".png"
+        p.width = 64
+        p.height = 32
+        m.squeeze.Push(p)
+    end for
+    print "squeeze: holding"; n; " x 8.4 MB"
+    m.ld.hold = true
+end sub
+
+sub moveSqueeze()
+    if m.squeeze = invalid or not m.ld.hold then return
+    for each p in m.squeeze
+        if p.loadStatus <> "ready" and p.loadStatus <> "failed" then return
+    end for
+    print "squeeze: in place"
+    m.ld.hold = false
 end sub
 
 ' the open water's light changes slowly, deep blue to teal and back
@@ -221,6 +476,7 @@ sub pickTarget(f as object, d as float)
 end sub
 
 sub onTick()
+    if m.released then return
     now = m.clock.TotalMilliseconds()
     dt = (now - m.last) / 1000.0
     m.last = now
@@ -236,7 +492,8 @@ sub onTick()
         m.tank.translation = [-20 + 14 * Sin(t / 97.0), -11 + 8 * Sin(t / 131.0)]
     end if
     moveWater(t)
-    if Int(t / 3) <> Int((t - dt) / 3) then checkLayers()
+    moveSqueeze()
+    moveLoader()
 
     for each key in m.schools
         moveLeader(m.schools[key], dt)
@@ -364,20 +621,64 @@ sub makeVisitor(f as object)
     m.visitors.Push(f)
 end sub
 
+' make room at once: the visitor and the moray go
+sub dropExtras()
+    if m.vpend <> invalid
+        m.vpend.spr.p.uri = ""
+        budgetGive("visitor")
+        m.vpend = invalid
+    end if
+    v = m.visitor
+    if v <> invalid
+        v.spr.g.visible = false
+        v.spr.p.uri = ""
+        budgetGive("visitor")
+        v.away = true
+        v.leaving = false
+        m.lastVisitor = v.sp.name
+        m.visitor = invalid
+        m.visitorWait = between(4, 15)
+    end if
+    if m.eel <> invalid and m.eel.DoesExist("loaded") and m.eel.loaded
+        eelVisible(false)
+        eelLoad(false)
+        if m.eel.state <> "hidden" then eelState("hidden")
+        m.eel.wait = between(15, 40)
+    end if
+end sub
+
 sub moveVisitors(dt as float)
     if m.visitors.Count() = 0 then return
     v = m.visitor
     if v = invalid
         m.visitorWait = m.visitorWait - dt
-        if m.visitorWait > 0 then return
-        ' a different species from the last one, if there is a choice
-        f = m.visitors[Int(Rnd(0) * m.visitors.Count())]
-        if m.visitors.Count() > 1
-            while f.sp.name = m.lastVisitor
-                f = m.visitors[Int(Rnd(0) * m.visitors.Count())]
-            end while
+        if m.visitorWait > 0 or not m.extras then return
+        if m.vpend = invalid
+            ' a different species from the last one, if there is a choice
+            f = m.visitors[Int(Rnd(0) * m.visitors.Count())]
+            if m.visitors.Count() > 1
+                while f.sp.name = m.lastVisitor
+                    f = m.visitors[Int(Rnd(0) * m.visitors.Count())]
+                end while
+            end if
+            f.spr.p.uri = f.sp.sheet
+            m.vpend = f
+            return
         end if
-        f.spr.p.uri = f.sp.sheet
+        ' in once its sheet is loaded
+        f = m.vpend
+        st = f.spr.p.loadStatus
+        if st = "ready" and not budgetTake("visitor", f.spr.p) then st = "failed"
+        if st = "failed"
+            f.spr.p.uri = ""
+            budgetGive("visitor")
+            m.vpend = invalid
+            m.visitorWait = between(20, 40)
+            noRoomForExtras()
+            return
+        end if
+        if st <> "ready" then return
+        m.vpend = invalid
         f.spr.cur = -1
         f.turning = false
         setDepth(f, between(0.45, 1.0))       ' (fresh each visit, mostly in front of the reef)
@@ -410,6 +711,7 @@ sub moveVisitors(dt as float)
     if v.leaving and (v.x < -300 or v.x > m.W + 300)
         v.spr.g.visible = false
         v.spr.p.uri = ""
+        budgetGive("visitor")
         v.away = true
         v.leaving = false
         m.lastVisitor = v.sp.name
@@ -650,6 +952,7 @@ sub eelLoad(v as boolean)
     if v then u = m.eelSheet else u = ""
     m.eelSpr.p.uri = u
     m.eelSpr2.p.uri = u
+    if not v then budgetGive("moray")
     m.eel.loaded = v
 end sub
 
@@ -666,8 +969,21 @@ sub moveEelFrames(dt as float)
     if s.state = "hidden"
         s.wait = s.wait - dt
         ' load its sheet a couple of seconds before it shows
-        if s.wait <= 2 and not s.loaded then eelLoad(true)
+        if s.wait <= 2 and not s.loaded and m.extras then eelLoad(true)
         if s.wait <= 0
+            if not s.loaded
+                s.wait = 10                ' (no room for it just now)
+                return
+            end if
+            st = m.eelSpr.p.loadStatus
+            if st = "ready" and not budgetTake("moray", m.eelSpr.p) then st = "failed"
+            if st = "failed"
+                eelLoad(false)
+                s.wait = between(15, 40)
+                noRoomForExtras()
+                return
+            end if
+            if st <> "ready" then return   ' (still loading)
             eelState("emerge")
             s.p = 0.0
             showEelPath(e.slide)

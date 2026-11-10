@@ -5,7 +5,11 @@
      one group that drifts a few pixels over minutes, so no pixel stays still. -->
 <component name="TankScene" extends="Scene">
     <script type="text/brightscript" uri="pkg:/components/TankScene.brs" />
+    <interface>
+        <function name="releaseAll" />
+    </interface>
     <children>
+        <Group id="squeeze" opacity="0.004" />
         <Rectangle id="water" width="1920" height="1080" color="0x06243FFF" />
         <Group id="tank">
             <Group id="background" />
