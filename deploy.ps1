@@ -5,7 +5,15 @@
 #   .\deploy.ps1 -Ip 192.168.1.50
 #
 # The password is read from the environment so that it is in no file here.
-param([Parameter(Mandatory = $true)][string]$Ip, [string]$Zip = "$PSScriptRoot\out\TranquilReef.zip")
+param([Parameter(Mandatory = $true)][string]$Ip, [string]$Zip = "")
+
+# (the script's own folder: $PSScriptRoot is empty in some ways of starting PowerShell)
+if (-not $Zip) {
+    $here = $PSScriptRoot
+    if (-not $here) { $here = Split-Path -Parent $MyInvocation.MyCommand.Path }
+    if (-not $here) { $here = 'D:\Tranquil-Reef' }
+    $Zip = Join-Path $here 'out\TranquilReef.zip'
+}
 
 if (-not $env:ROKU_DEV_PASSWORD) {
     Write-Host 'Set the password first:   $env:ROKU_DEV_PASSWORD = "..."'

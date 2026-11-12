@@ -51,8 +51,6 @@ sub init()
     m.timer = m.top.findNode("tick")
     m.timer.observeField("fire", "onTick")
     m.timer.control = "start"
-    ' (keys only reach a node with focus: without it Back did nothing)
-    m.top.setFocus(true)
 end sub
 
 sub setTiles(g as object, tiles as object)
@@ -87,12 +85,6 @@ function releaseAll(params = invalid as dynamic) as boolean
     m.ld = invalid
     print "released"; posters.Count(); " pictures"
     return true
-end function
-
-' Back (when it is opened as a channel) closes it: let go of everything first
-function onKeyEvent(key as string, press as boolean) as boolean
-    if press and key = "back" then releaseAll()
-    return false
 end function
 
 ' The Roku shares its texture memory with whatever is behind the reef: started as a screensaver

@@ -39,8 +39,8 @@ DEV_MODE_STEPS = (
 AFTER = (
     "To make it your screensaver on the Roku:\n"
     "  Settings  >  Theme  >  Screensavers  >  Tranquil Reef\n"
-    "(on some models: Settings > Screensaver).  You can also watch it any time:\n"
-    "it is on the home screen as Tranquil Reef."
+    "(on some models: Settings > Screensaver).  Choose Preview there to see it\n"
+    "at once.  (It is a screensaver only, so it is not on the home screen.)"
 )
 
 
@@ -128,12 +128,6 @@ def send(address, user, password, zip_path):
     return ok, ('Roku: ' + '; '.join(said)) if said else 'Sent. The Roku gave no clear answer; look at the television.'
 
 
-def launch(ip):
-    try:
-        urllib.request.urlopen(urllib.request.Request('http://%s:8060/launch/dev' % ip, data=b'', method='POST'), timeout=5)
-        return True
-    except OSError:
-        return False
 
 
 # ------------------------------------------------------------ the window
@@ -260,7 +254,6 @@ class Window:
                     if ok:
                         self.keep(addr)
                         self.say('\nInstalled.\n' + AFTER + '\n')
-                        launch(addr)
         except queue.Empty:
             pass
         self.root.after(100, self.poll)
